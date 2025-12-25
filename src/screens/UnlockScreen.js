@@ -140,7 +140,7 @@ export default function UnlockScreen({ email, onUnlock }) {
   const pickRecoveryKeyFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'text/plain',
+        type: ['text/plain'],
         copyToCacheDirectory: true
       });
 
@@ -215,7 +215,7 @@ export default function UnlockScreen({ email, onUnlock }) {
                     value={masterPassword}
                     onChangeText={setMasterPassword}
                     placeholder="Enter your master password"
-                    secureTextEntry
+                    secureTextEntry={true}
                     style={{
                       backgroundColor: '#F9FAFB',
                       borderWidth: 1,
@@ -272,7 +272,7 @@ export default function UnlockScreen({ email, onUnlock }) {
                     value={recoveryKey}
                     onChangeText={setRecoveryKey}
                     placeholder="Paste your recovery key"
-                    multiline
+                    multiline={true}
                     numberOfLines={4}
                     style={{
                       backgroundColor: '#F9FAFB',

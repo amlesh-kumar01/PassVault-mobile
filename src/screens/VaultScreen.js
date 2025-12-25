@@ -402,7 +402,7 @@ export default function VaultScreen({ token, keyPair, onLock, onLogout }) {
                   value={newItem.password}
                   onChangeText={(text) => setNewItem({ ...newItem, password: text })}
                   placeholder="••••••••"
-                  secureTextEntry
+                  secureTextEntry={true}
                   style={{
                     backgroundColor: '#F9FAFB',
                     borderWidth: 1,
@@ -421,7 +421,7 @@ export default function VaultScreen({ token, keyPair, onLock, onLogout }) {
                   value={newItem.note}
                   onChangeText={(text) => setNewItem({ ...newItem, note: text })}
                   placeholder="Additional notes..."
-                  multiline
+                  multiline={true}
                   numberOfLines={3}
                   style={{
                     backgroundColor: '#F9FAFB',

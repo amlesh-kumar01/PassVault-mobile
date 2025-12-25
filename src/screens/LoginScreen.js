@@ -220,7 +220,7 @@ export default function LoginScreen({ navigation, onLogin }) {
                 value={accountPassword}
                 onChangeText={setAccountPassword}
                 placeholder="For backend authentication"
-                secureTextEntry
+                secureTextEntry={true}
                 style={{
                   backgroundColor: '#F9FAFB',
                   borderWidth: 1,
@@ -241,7 +241,7 @@ export default function LoginScreen({ navigation, onLogin }) {
                     value={masterPassword}
                     onChangeText={setMasterPassword}
                     placeholder="Min 12 characters"
-                    secureTextEntry
+                    secureTextEntry={true}
                     style={{
                       backgroundColor: '#F9FAFB',
                       borderWidth: 1,
@@ -260,7 +260,7 @@ export default function LoginScreen({ navigation, onLogin }) {
                     value={confirmMasterPassword}
                     onChangeText={setConfirmMasterPassword}
                     placeholder="Re-enter master password"
-                    secureTextEntry
+                    secureTextEntry={true}
                     style={{
                       backgroundColor: '#F9FAFB',
                       borderWidth: 1,

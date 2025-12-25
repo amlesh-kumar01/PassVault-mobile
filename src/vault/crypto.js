@@ -3,7 +3,7 @@
 
 import * as Crypto from 'expo-crypto';
 import 'react-native-get-random-values'; // Polyfill for crypto.getRandomValues
-import { argon2id } from '@noble/hashes/argon2';
+import { argon2id } from '@noble/hashes/argon2.js';
 
 // Use React Native crypto.subtle polyfill
 const cryptoSubtle = crypto.subtle;
