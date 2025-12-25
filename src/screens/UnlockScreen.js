@@ -140,12 +140,12 @@ export default function UnlockScreen({ email, onUnlock }) {
   const pickRecoveryKeyFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/plain'],
-        copyToCacheDirectory: true
+        type: 'text/plain',
+        copyToCacheDirectory: false
       });
 
-      if (result.type === 'success') {
-        const content = await FileSystem.readAsStringAsync(result.uri);
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const content = await FileSystem.readAsStringAsync(result.assets[0].uri);
         // Extract recovery key from file
         const keyMatch = content.match(/Recovery Key:\s*([A-Za-z0-9+/=]+)/);
         if (keyMatch) {
