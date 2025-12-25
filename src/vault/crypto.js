@@ -2,12 +2,22 @@
 // Production-grade encryption with Expo Crypto API
 
 import * as Crypto from 'expo-crypto';
-import 'react-native-get-random-values'; // Polyfill for crypto.getRandomValues
 import { argon2id } from '@noble/hashes/argon2.js';
 
-// Use React Native crypto.subtle polyfill
-const cryptoSubtle = crypto.subtle;
-const cryptoRandom = crypto;
+// Lazy accessors for crypto API (polyfills load asynchronously in Expo Go)
+function getCryptoSubtle() {
+  if (!global.crypto?.subtle) {
+    throw new Error('crypto.subtle not available. Ensure polyfills are loaded.');
+  }
+  return global.crypto.subtle;
+}
+
+function getCryptoRandom() {
+  if (!global.crypto?.getRandomValues) {
+    throw new Error('crypto.getRandomValues not available. Ensure polyfills are loaded.');
+  }
+  return global.crypto;
+}
 
 /**
  * Derives a secure master key using Argon2id (REQUIRED for zero-knowledge).
@@ -38,7 +48,7 @@ export async function deriveKey(password, salt) {
     });
     
     // Import into Web Crypto API as extractable key for session storage
-    const masterKey = await cryptoSubtle.importKey(
+    const masterKey = await getCryptoSubtle().importKey(
       'raw',
       derivedKey,
       { name: 'AES-GCM', length: 256 },
@@ -57,7 +67,7 @@ export async function deriveKey(password, salt) {
     console.error('Argon2id failed, falling back to PBKDF2 (INSECURE):', err);
     
     // FALLBACK: PBKDF2 (NOT recommended for production)
-    const keyMaterial = await cryptoSubtle.importKey(
+    const keyMaterial = await getCryptoSubtle().importKey(
       'raw',
       enc.encode(password),
       { name: 'PBKDF2' },
@@ -65,7 +75,7 @@ export async function deriveKey(password, salt) {
       ['deriveBits']
     );
     
-    const bits = await cryptoSubtle.deriveBits(
+    const bits = await getCryptoSubtle().deriveBits(
       {
         name: 'PBKDF2',
         salt: salt,
@@ -76,7 +86,7 @@ export async function deriveKey(password, salt) {
       256
     );
     
-    const masterKey = await cryptoSubtle.importKey(
+    const masterKey = await getCryptoSubtle().importKey(
       'raw',
       new Uint8Array(bits),
       { name: 'AES-GCM', length: 256 },
@@ -94,7 +104,7 @@ export async function deriveKey(password, salt) {
  * @returns {Promise<CryptoKey>} Extractable DEK
  */
 export async function generateDEK() {
-  return cryptoSubtle.generateKey(
+  return getCryptoSubtle().generateKey(
     { name: "AES-GCM", length: 256 },
     true, // Extractable so we can encrypt it with master key
     ["encrypt", "decrypt"]
@@ -109,11 +119,11 @@ export async function generateDEK() {
  */
 export async function encryptDEK(dek, masterKey) {
   // Export DEK to raw bytes
-  const dekBytes = await cryptoSubtle.exportKey("raw", dek);
+  const dekBytes = await getCryptoSubtle().exportKey("raw", dek);
   
-  const iv = cryptoRandom.getRandomValues(new Uint8Array(12));
+  const iv = getCryptoRandom().getRandomValues(new Uint8Array(12));
   
-  const encryptedDEK = await cryptoSubtle.encrypt(
+  const encryptedDEK = await getCryptoSubtle().encrypt(
     { name: "AES-GCM", iv },
     masterKey,
     dekBytes
@@ -133,13 +143,13 @@ export async function encryptDEK(dek, masterKey) {
  * @returns {Promise<CryptoKey>} Decrypted DEK
  */
 export async function decryptDEK(encryptedDEK, iv, masterKey) {
-  const dekBytes = await cryptoSubtle.decrypt(
+  const dekBytes = await getCryptoSubtle().decrypt(
     { name: "AES-GCM", iv },
     masterKey,
     encryptedDEK
   );
   
-  return cryptoSubtle.importKey(
+  return getCryptoSubtle().importKey(
     "raw",
     dekBytes,
     { name: "AES-GCM", length: 256 },
@@ -158,9 +168,9 @@ export async function encryptVault(data, dek) {
   const enc = new TextEncoder();
   const plaintext = enc.encode(JSON.stringify(data));
   
-  const iv = cryptoRandom.getRandomValues(new Uint8Array(12));
+  const iv = getCryptoRandom().getRandomValues(new Uint8Array(12));
   
-  const ciphertext = await cryptoSubtle.encrypt(
+  const ciphertext = await getCryptoSubtle().encrypt(
     { name: "AES-GCM", iv },
     dek,
     plaintext
@@ -181,7 +191,7 @@ export async function encryptVault(data, dek) {
  */
 export async function decryptVault(encryptedVault, iv, dek) {
   try {
-    const decrypted = await cryptoSubtle.decrypt(
+    const decrypted = await getCryptoSubtle().decrypt(
       { name: "AES-GCM", iv },
       dek,
       encryptedVault
@@ -201,7 +211,7 @@ export async function decryptVault(encryptedVault, iv, dek) {
  * @returns {Uint8Array} 32-byte salt
  */
 export function generateSalt() {
-  return cryptoRandom.getRandomValues(new Uint8Array(32));
+  return getCryptoRandom().getRandomValues(new Uint8Array(32));
 }
 
 /**

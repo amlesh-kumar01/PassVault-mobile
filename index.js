@@ -1,3 +1,10 @@
+// CRITICAL: Polyfills must load BEFORE any other code
+import 'react-native-get-random-values';
+
+// Use native crypto with Expo Dev Client
+import { install } from 'react-native-quick-crypto';
+install();
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';
