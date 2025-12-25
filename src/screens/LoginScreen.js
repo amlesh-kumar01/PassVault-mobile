@@ -25,6 +25,7 @@ export default function LoginScreen({ navigation, onLogin }) {
   const [confirmMasterPassword, setConfirmMasterPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [recoveryKeyDownloaded, setRecoveryKeyDownloaded] = useState(false);
+  const [registrationSalt, setRegistrationSalt] = useState(null); // Store salt for recovery key
 
   const handleLogin = async () => {
     if (!email || !accountPassword) {
@@ -74,8 +75,8 @@ export default function LoginScreen({ navigation, onLogin }) {
       await setAuthToken(response.token);
       await setUserEmail(email);
 
-      // Generate salt and derive master key
-      const salt = generateSalt();
+      // Use the SAME salt that was generated for the recovery key
+      const salt = registrationSalt || generateSalt();
       await setSalt(salt);
 
       const masterKey = await deriveKey(masterPassword, salt);
@@ -103,12 +104,25 @@ export default function LoginScreen({ navigation, onLogin }) {
       // Sync to backend
       const encryptedBlob = {
         encryptedVault: Array.from(encryptedVault),
-        vaultIV: Array.from(vaultIV)
+        vaultIV: Array.from(vaultIV),
+        encryptedDEK: Array.from(encryptedDEK),
+        dekIV: Array.from(dekIV),
+        salt: Array.from(salt)
       };
 
-      await api.syncVault(encryptedBlob, 1);
+      try {
+        await api.syncVault(encryptedBlob, 1);
+      } catch (syncErr) {
+        console.error('Failed to sync vault to backend:', syncErr);
+        Alert.alert('Warning', 'Vault created locally but failed to sync to server. It will sync later.');
+      }
 
-      onLogin(response.token, email);
+      // Store session keys
+      const { setSessionKeys } = await import('../utils/storage');
+      await setSessionKeys(masterKey, dek);
+
+      // Call onLogin with token, email, and keys
+      onLogin(response.token, email, { masterKey, dek });
     } catch (err) {
       Alert.alert('Registration Failed', err.message);
     } finally {
@@ -123,7 +137,10 @@ export default function LoginScreen({ navigation, onLogin }) {
     }
 
     try {
+      // Generate salt ONCE and store it for registration
       const salt = generateSalt();
+      setRegistrationSalt(salt); // Store for later use in registration
+      
       const recoveryKey = generateRecoveryKey(email, masterPassword, salt);
       
       const filename = `PassVault_Recovery_Key_${email.replace('@', '_')}.txt`;

@@ -2,7 +2,7 @@
 
 import { getAuthToken } from './storage';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://10.240.68.78:5000/api';
 
 export const api = {
   async fetch(endpoint, options = {}) {

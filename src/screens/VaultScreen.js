@@ -69,10 +69,13 @@ export default function VaultScreen({ token, keyPair, onLock, onLogout }) {
       await setVault(updatedVault);
       await setVaultVersion(updatedVault.version);
       
-      // Sync to backend
+      // Sync to backend (include all vault data)
       const encryptedBlob = {
         encryptedVault: Array.from(encryptedVault),
-        vaultIV: Array.from(vaultIV)
+        vaultIV: Array.from(vaultIV),
+        encryptedDEK: currentVault.encryptedDEK,
+        dekIV: currentVault.dekIV,
+        salt: currentVault.salt
       };
       
       const result = await pushToRemote(encryptedBlob, updatedVault.version);

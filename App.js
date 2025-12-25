@@ -43,9 +43,12 @@ export default function App() {
     }
   };
 
-  const handleLogin = (authToken, userEmail) => {
+  const handleLogin = (authToken, userEmail, keys = null) => {
     setToken(authToken);
     setEmail(userEmail);
+    if (keys) {
+      setKeyPair(keys);
+    }
   };
 
   const handleUnlock = (keys) => {
@@ -81,7 +84,7 @@ export default function App() {
             </Stack.Screen>
           ) : !keyPair ? (
             <Stack.Screen name="Unlock">
-              {props => <UnlockScreen {...props} email={email} onUnlock={handleUnlock} />}
+              {props => <UnlockScreen {...props} email={email} onUnlock={handleUnlock} onLogout={handleLogout} />}
             </Stack.Screen>
           ) : (
             <Stack.Screen name="Vault">

@@ -25,15 +25,15 @@ export async function deriveKey(password, salt) {
   }
   
   try {
-    // PRODUCTION: Use Argon2id (memory-hard, GPU-resistant)
-    // Parameters: m=65536 KiB (64MB), t=3 iterations, p=4 parallelism
+    // BALANCED: Use Argon2id optimized for both desktop and mobile
+    // Parameters: m=16384 KiB (16MB), t=2 iterations, p=1 parallelism
     const passwordBytes = enc.encode(password);
     
     // Using @noble/hashes argon2id
     const derivedKey = argon2id(passwordBytes, salt, {
-      t: 3,        // iterations
-      m: 65536,    // memory in KiB (64MB)
-      p: 4,        // parallelism
+      t: 2,        // iterations (reduced from 3 for mobile)
+      m: 16384,    // memory in KiB (16MB - reduced from 64MB for mobile)
+      p: 1,        // parallelism (reduced from 4 for mobile)
       dkLen: 32    // output length in bytes
     });
     

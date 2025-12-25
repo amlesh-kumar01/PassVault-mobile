@@ -14,10 +14,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { getSalt, setSessionKeys, getVault } from '../utils/storage';
+import { getSalt, setSessionKeys, getVault, clearAllData, setSalt, setVault } from '../utils/storage';
+import { api } from '../utils/api';
 import { deriveKey, decryptDEK, parseRecoveryKey } from '../vault/crypto';
 
-export default function UnlockScreen({ email, onUnlock }) {
+export default function UnlockScreen({ email, onUnlock, onLogout }) {
   const [masterPassword, setMasterPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -59,9 +60,88 @@ export default function UnlockScreen({ email, onUnlock }) {
 
     setLoading(true);
     try {
-      const salt = await getSalt();
+      let salt = await getSalt();
+      let vaultData = await getVault();
+      
+      // If no local data, try to pull from server
+      if (!salt || !vaultData) {
+        console.log('No local vault data found, pulling from server...');
+        try {
+          const serverVault = await api.pullVault();
+          console.log('Server vault response:', serverVault);
+          
+          if (serverVault && serverVault.encryptedBlob) {
+            // Handle encrypted_blob - it might be a Buffer, string, or object
+            let blob = serverVault.encryptedBlob;
+            
+            // If it's a Buffer object from PostgreSQL
+            if (blob && blob.type === 'Buffer' && Array.isArray(blob.data)) {
+              console.log('Converting Buffer to string...');
+              // Convert byte array to string
+              const jsonString = String.fromCharCode(...blob.data);
+              blob = JSON.parse(jsonString);
+            } else if (typeof blob === 'string') {
+              // If it's already a string, parse it
+              try {
+                blob = JSON.parse(blob);
+              } catch (parseErr) {
+                console.error('Failed to parse blob:', parseErr);
+                throw new Error('Invalid vault data format from server');
+              }
+            }
+            
+            console.log('Blob data received:', {
+              hasEncryptedVault: !!blob.encryptedVault,
+              hasVaultIV: !!blob.vaultIV,
+              hasEncryptedDEK: !!blob.encryptedDEK,
+              hasDekIV: !!blob.dekIV,
+              hasSalt: !!blob.salt
+            });
+            
+            // Validate that all required fields are present
+            if (!blob.encryptedDEK || !blob.dekIV || !blob.salt) {
+              console.error('Incomplete vault data from server');
+              Alert.alert(
+                'Incomplete Vault Data',
+                'The vault on the server is missing encryption keys (encryptedDEK, dekIV, or salt). This vault was created with an older version.\n\nPlease:\n1. Delete your account data\n2. Re-register to create a new vault\n\nOr sync from a device with a complete vault.'
+              );
+              setLoading(false);
+              return;
+            }
+            
+            // Store locally
+            vaultData = {
+              encryptedVault: blob.encryptedVault,
+              vaultIV: blob.vaultIV,
+              encryptedDEK: blob.encryptedDEK,
+              dekIV: blob.dekIV,
+              salt: blob.salt,
+              version: serverVault.version
+            };
+            
+            await setVault(vaultData);
+            
+            if (blob.salt) {
+              salt = new Uint8Array(blob.salt);
+              await setSalt(salt);
+              console.log('Salt stored successfully');
+            }
+          } else {
+            console.log('No vault data on server');
+            Alert.alert('Error', 'No vault found on server. Please register on another device first.');
+            setLoading(false);
+            return;
+          }
+        } catch (pullErr) {
+          console.error('Failed to pull vault from server:', pullErr);
+          Alert.alert('Sync Error', 'Failed to sync vault from server: ' + pullErr.message + '\n\nPlease ensure you have registered on another device.');
+          setLoading(false);
+          return;
+        }
+      }
+      
       if (!salt) {
-        Alert.alert('Error', 'No salt found. Please register first.');
+        Alert.alert('Error', 'No vault found. Please register first or sync from another device.');
         setLoading(false);
         return;
       }
@@ -69,8 +149,6 @@ export default function UnlockScreen({ email, onUnlock }) {
       // Derive master key from password
       const masterKey = await deriveKey(masterPassword, salt);
 
-      // Get vault data
-      const vaultData = await getVault();
       if (!vaultData) {
         Alert.alert('Error', 'No vault data found');
         setLoading(false);
@@ -88,6 +166,7 @@ export default function UnlockScreen({ email, onUnlock }) {
       // Navigate to vault
       onUnlock({ masterKey, dek });
     } catch (err) {
+      console.error('Unlock error:', err);
       Alert.alert('Unlock Failed', 'Invalid password or corrupted vault data');
     } finally {
       setLoading(false);
@@ -171,6 +250,32 @@ export default function UnlockScreen({ email, onUnlock }) {
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
           <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }}>
+            {/* Logout Button */}
+            <TouchableOpacity
+              onPress={async () => {
+                Alert.alert(
+                  'Logout',
+                  'Are you sure you want to logout? You will need to login again to access your vault.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Logout',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await clearAllData();
+                        if (onLogout) {
+                          onLogout();
+                        }
+                      }
+                    }
+                  ]
+                );
+              }}
+              style={{ alignSelf: 'flex-end', marginBottom: 16 }}
+            >
+              <Text style={{ fontSize: 14, color: '#EF4444', fontWeight: '600' }}>Logout</Text>
+            </TouchableOpacity>
+
             {/* Logo */}
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
               <View style={{ width: 64, height: 64, backgroundColor: '#4F46E5', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
