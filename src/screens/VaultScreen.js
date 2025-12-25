@@ -8,7 +8,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  FlatList
+  FlatList,
+  Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';

@@ -160,10 +160,13 @@ export const setSessionKeys = async (masterKey, dek) => {
   sessionDEK = dek;
   
   try {
-    // Keys are already Uint8Array (32 bytes each)
+    // Export CryptoKey objects to raw bytes first
+    const masterKeyBytes = new Uint8Array(await crypto.subtle.exportKey('raw', masterKey));
+    const dekBytes = new Uint8Array(await crypto.subtle.exportKey('raw', dek));
+    
     // Store as base64 in SecureStore
-    const masterKeyString = btoa(String.fromCharCode(...masterKey));
-    const dekString = btoa(String.fromCharCode(...dek));
+    const masterKeyString = btoa(String.fromCharCode(...masterKeyBytes));
+    const dekString = btoa(String.fromCharCode(...dekBytes));
     
     await SecureStore.setItemAsync(KEYS.SESSION_MASTER_KEY, masterKeyString);
     await SecureStore.setItemAsync(KEYS.SESSION_DEK, dekString);
@@ -193,10 +196,24 @@ export const getSessionKeys = async () => {
     const masterKeyBytes = new Uint8Array(atob(masterKeyString).split('').map(c => c.charCodeAt(0)));
     const dekBytes = new Uint8Array(atob(dekString).split('').map(c => c.charCodeAt(0)));
     
-    sessionMasterKey = masterKeyBytes;
-    sessionDEK = dekBytes;
+    // Re-import as CryptoKey objects
+    sessionMasterKey = await crypto.subtle.importKey(
+      'raw',
+      masterKeyBytes,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']
+    );
     
-    return { masterKey: masterKeyBytes, dek: dekBytes };
+    sessionDEK = await crypto.subtle.importKey(
+      'raw',
+      dekBytes,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+    
+    return { masterKey: sessionMasterKey, dek: sessionDEK };
   } catch (err) {
     console.error('Failed to restore session keys:', err);
     return null;
