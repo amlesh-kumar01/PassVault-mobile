@@ -60,7 +60,7 @@ export const api = {
     });
   },
 
-  async syncVault(encryptedBlob, version) {
+  async syncVault(encryptedBlob, lastModified) {
     const token = await getAuthToken();
     
     const response = await fetch(`${API_BASE_URL}/vault/sync`, {
@@ -71,21 +71,16 @@ export const api = {
       },
       body: JSON.stringify({ 
         encryptedBlob: JSON.stringify(encryptedBlob),
-        version 
+        lastModified 
       })
     });
-
-    if (response.status === 409) {
-      const data = await response.json();
-      return { success: false, conflict: true, serverVersion: data.serverVersion };
-    }
 
     if (!response.ok) {
       throw new Error('Sync failed');
     }
 
     const data = await response.json();
-    return { success: true, newVersion: data.newVersion };
+    return data; // Returns { success, action, lastModified, encrypted_blob? }
   },
 
   async pullVault() {
@@ -104,7 +99,7 @@ export const api = {
     const data = await response.json();
     return {
       encryptedBlob: data.encrypted_blob,
-      version: data.version
+      lastModified: data.lastModified
     };
   }
 };

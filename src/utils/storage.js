@@ -95,22 +95,22 @@ export const removeVault = async () => {
   }
 };
 
-// Vault Version
-export const getVaultVersion = async () => {
+// Vault Last Modified (timestamp)
+export const getVaultLastModified = async () => {
   try {
-    const version = await AsyncStorage.getItem(KEYS.VAULT_VERSION);
-    return version ? parseInt(version, 10) : 0;
+    const timestamp = await AsyncStorage.getItem(KEYS.VAULT_VERSION); // Reusing same key for compatibility
+    return timestamp || new Date(0).toISOString(); // Return epoch if not set
   } catch (err) {
-    console.error('Failed to get vault version:', err);
-    return 0;
+    console.error('Failed to get vault lastModified:', err);
+    return new Date(0).toISOString();
   }
 };
 
-export const setVaultVersion = async (version) => {
+export const setVaultLastModified = async (timestamp) => {
   try {
-    await AsyncStorage.setItem(KEYS.VAULT_VERSION, version.toString());
+    await AsyncStorage.setItem(KEYS.VAULT_VERSION, timestamp);
   } catch (err) {
-    console.error('Failed to set vault version:', err);
+    console.error('Failed to set vault lastModified:', err);
   }
 };
 

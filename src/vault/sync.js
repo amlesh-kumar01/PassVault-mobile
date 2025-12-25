@@ -1,28 +1,73 @@
 // Sync hook for React Native
 
 import { useState, useEffect } from 'react';
-import { getVault, setVault, getVaultVersion, setVaultVersion } from '../utils/storage';
+import { getVault, setVault, getVaultLastModified, setVaultLastModified } from '../utils/storage';
 import { api } from '../utils/api';
 
 export const useSync = (token) => {
   const [syncStatus, setSyncStatus] = useState('idle');
 
-  const pushToRemote = async (encryptedBlob, version) => {
+  const pushToRemote = async (encryptedBlob, lastModified) => {
     try {
       setSyncStatus('syncing');
-      const result = await api.syncVault(encryptedBlob, version);
+      const result = await api.syncVault(encryptedBlob, lastModified);
       
       if (result.success) {
-        setSyncStatus('synced');
-        setTimeout(() => setSyncStatus('idle'), 2000);
+        if (result.action === 'updated') {
+          // Server accepted our data
+          await setVaultLastModified(result.lastModified);
+          setSyncStatus('synced');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+          return { success: true, action: 'updated' };
+        } else if (result.action === 'pull_required') {
+          // Server has newer data - we need to pull
+          setSyncStatus('syncing');
+          const pullResult = await handleServerData(result.encrypted_blob, result.lastModified);
+          if (pullResult.success) {
+            setSyncStatus('synced');
+            setTimeout(() => setSyncStatus('idle'), 2000);
+            return { success: true, action: 'pulled', dataUpdated: true };
+          } else {
+            setSyncStatus('error');
+            return pullResult;
+          }
+        } else if (result.action === 'up_to_date') {
+          // Already in sync
+          setSyncStatus('synced');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+          return { success: true, action: 'up_to_date' };
+        }
       } else {
         setSyncStatus('error');
       }
       
       return result;
     } catch (err) {
-      console.error('Push error:', err);
+      console.error('Sync error:', err);
       setSyncStatus('error');
+      return { success: false, error: err.message };
+    }
+  };
+
+  const handleServerData = async (encryptedBlob, serverTimestamp) => {
+    try {
+      // Handle blob - it might be a Buffer, string, or object
+      let blobToStore = encryptedBlob;
+      
+      // If it's a Buffer object from PostgreSQL
+      if (blobToStore && blobToStore.type === 'Buffer' && Array.isArray(blobToStore.data)) {
+        console.log('Converting Buffer to string in sync...');
+        const jsonString = String.fromCharCode(...blobToStore.data);
+        blobToStore = JSON.parse(jsonString);
+      } else if (typeof encryptedBlob === 'string') {
+        blobToStore = JSON.parse(encryptedBlob);
+      }
+      
+      await setVault(blobToStore);
+      await setVaultLastModified(serverTimestamp);
+      return { success: true, updated: true, lastModified: serverTimestamp, blob: blobToStore };
+    } catch (err) {
+      console.error('Error handling server data:', err);
       return { success: false, error: err.message };
     }
   };
@@ -30,33 +75,34 @@ export const useSync = (token) => {
   const pullFromRemote = async () => {
     try {
       setSyncStatus('syncing');
-      const { encryptedBlob, version: serverVersion } = await api.pullVault();
-      const localVersion = await getVaultVersion();
+      const { encryptedBlob, lastModified: serverTimestamp } = await api.pullVault();
+      
+      if (!encryptedBlob) {
+        // No vault on server yet
+        setSyncStatus('idle');
+        return { success: true, updated: false };
+      }
 
-      if (serverVersion > localVersion) {
-        console.log(`Updating local vault from v${localVersion} to v${serverVersion}`);
+      const localTimestamp = await getVaultLastModified();
+      const serverDate = new Date(serverTimestamp);
+      const localDate = new Date(localTimestamp);
+
+      if (serverDate > localDate) {
+        console.log(`Updating local vault from ${localTimestamp} to ${serverTimestamp}`);
+        const result = await handleServerData(encryptedBlob, serverTimestamp);
         
-        // Handle blob - it might be a Buffer, string, or object
-        let blobToStore = encryptedBlob;
-        
-        // If it's a Buffer object from PostgreSQL
-        if (blobToStore && blobToStore.type === 'Buffer' && Array.isArray(blobToStore.data)) {
-          console.log('Converting Buffer to string in sync...');
-          const jsonString = String.fromCharCode(...blobToStore.data);
-          blobToStore = JSON.parse(jsonString);
-        } else if (typeof encryptedBlob === 'string') {
-          blobToStore = JSON.parse(encryptedBlob);
+        if (result.success) {
+          setSyncStatus('synced');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+          return { success: true, updated: true, lastModified: serverTimestamp, blob: result.blob };
+        } else {
+          setSyncStatus('error');
+          return result;
         }
-        
-        await setVault(blobToStore);
-        await setVaultVersion(serverVersion);
-        setSyncStatus('synced');
-        setTimeout(() => setSyncStatus('idle'), 2000);
-        return { success: true, updated: true, version: serverVersion, blob: blobToStore };
       }
       
       setSyncStatus('idle');
-      return { success: true, updated: false, version: localVersion };
+      return { success: true, updated: false, lastModified: localTimestamp };
     } catch (err) {
       console.error('Pull error:', err);
       setSyncStatus('error');
